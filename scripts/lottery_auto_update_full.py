@@ -630,12 +630,37 @@ def build_539_number_confidence_rank(source_df: Optional[pd.DataFrame] = None) -
         "hot_score", "gap_score", "zone_score", "tie_score",
     ]
 
-    def _write(rows: List[Dict[str, object]]) -> pd.DataFrame:
+    def _write(rows: List[Dict[str, object]], sample_total: int = 0) -> pd.DataFrame:
         out = pd.DataFrame(rows)
         if out.empty:
             out = pd.DataFrame(columns=cols)
-        out = out.sort_values(["confidence_score", "recent_30_count", "gap", "number"], ascending=[False, False, False, True]).reset_index(drop=True)
+        # 先用模型原始分數排序，再把畫面上的「信心分數」轉成排名強度。
+        # 這樣不會因為小樣本上限把前幾名全部壓成同一個 76。
+        sort_col = "_raw_score" if "_raw_score" in out.columns else "confidence_score"
+        out["_sort_score"] = pd.to_numeric(out.get(sort_col, 0), errors="coerce").fillna(0)
+        out["_recent30_sort"] = pd.to_numeric(out.get("recent_30_count", 0), errors="coerce").fillna(0)
+        out["_gap_sort"] = pd.to_numeric(out.get("gap", 0), errors="coerce").fillna(0)
+        out = out.sort_values(["_sort_score", "_recent30_sort", "_gap_sort", "number"], ascending=[False, False, False, True]).reset_index(drop=True)
         out["rank"] = range(1, len(out) + 1)
+
+        # 顯示分數：不是中獎機率，是 Top20 排名強度。
+        # 小樣本也要能看出差距，Top5 會落在 90+，後面逐步下降。
+        if sample_total < 10:
+            top_score, step = 96.0, 1.15
+        elif sample_total < 30:
+            top_score, step = 95.0, 1.05
+        elif sample_total < 80:
+            top_score, step = 94.0, 0.95
+        else:
+            top_score, step = 93.0, 0.85
+        display_scores = []
+        for i, (_, r) in enumerate(out.iterrows(), start=1):
+            raw = float(r.get("_sort_score", 0) or 0)
+            tiny = (raw % 1.0) * 0.18  # 保留一點模型差異，避免整數階梯太死。
+            display_scores.append(round(max(39.0, min(99.0, top_score - (i - 1) * step + tiny)), 2))
+        if display_scores:
+            out["confidence_score"] = display_scores
+
         for c in cols:
             if c not in out.columns:
                 out[c] = ""
@@ -655,23 +680,25 @@ def build_539_number_confidence_rank(source_df: Optional[pd.DataFrame] = None) -
         rows = []
         for idx, n in enumerate(starter_order):
             zone = (n - 1) // 10 + 1
-            # Deterministic starter scale, not random and not flat 50.
-            score = 59.80 - idx * 0.47 + ((n * 11) % 7) * 0.03
+            # Deterministic starter ranking strength, not random and not flat 50.
+            # Top5 會顯示 90+，但這是「推薦強度」不是中獎機率。
+            score = 96.0 - idx * 1.15 + ((n * 11) % 7) * 0.03
             rows.append({
                 "rank": 0,
                 "number": f"{n:02d}",
-                "confidence_score": round(max(41.0, score), 2),
+                "confidence_score": round(max(39.0, score), 2),
+                "_raw_score": round(max(39.0, score), 4),
                 "type": "啟動分散",
                 "recent_30_count": 0,
                 "recent_80_count": 0,
                 "gap": 0,
-                "reason": f"尚未累積 539 歷史資料；啟動盤先用第 {zone} 區分散推薦，更新後會改用真實開獎統計",
+                "reason": f"尚未累積 539 歷史資料；啟動盤先用第 {zone} 區分散推薦。分數是排行強度，不是中獎機率",
                 "hot_score": 0,
                 "gap_score": 0,
                 "zone_score": round(70 - idx * 0.6, 2),
                 "tie_score": round(((n * 37) % 23) / 23 * 6, 2),
             })
-        return _write(rows)
+        return _write(rows, sample_total=0)
 
     draws = [list(map(int, nums)) for nums in df.get("_nums", []) if isinstance(nums, list) and len(nums) >= 5]
     total = len(draws)
@@ -745,8 +772,7 @@ def build_539_number_confidence_rank(source_df: Optional[pd.DataFrame] = None) -
         # Tiny deterministic tie-breaker so low-sample clouds do not show many identical 50s.
         tie_score = ((n * 37 + total * 13) % 23) / 23 * 100.0
 
-        sample_cap = 76.0 if total < 10 else (86.0 if total < 30 else 99.0)
-        score = (
+        raw_score = (
             18.0
             + hot_score * 0.29
             + mid_score * 0.16
@@ -756,7 +782,9 @@ def build_539_number_confidence_rank(source_df: Optional[pd.DataFrame] = None) -
             + parity_score * 0.06
             + tie_score * 0.08
         )
-        score = min(sample_cap, max(1.0, score))
+        # 原始分數只負責排序；顯示用分數在 _write() 依名次重新拉開，
+        # 避免小樣本時一堆號碼一起卡在 76.0。
+        score = max(1.0, raw_score)
 
         if c30[n] > exp30 * 1.25 and gap_raw >= ideal_gap:
             typ = "熱+補"
@@ -777,12 +805,13 @@ def build_539_number_confidence_rank(source_df: Optional[pd.DataFrame] = None) -
             f"遺漏 {gap_raw} 期；{zone_name} 區補位分 {zone_score:.1f}。"
         )
         if total < 10:
-            reason += f"目前雲端樣本只有 {total} 期，分數已用低樣本上限處理。"
+            reason += f"目前雲端樣本只有 {total} 期，畫面分數已改成排名強度刻度，Top5 可呈現 90+；不是中獎機率。"
 
         rows.append({
             "rank": 0,
             "number": f"{n:02d}",
             "confidence_score": round(score, 2),
+            "_raw_score": round(raw_score, 4),
             "type": typ,
             "recent_30_count": c30[n],
             "recent_80_count": c80[n],
@@ -793,7 +822,7 @@ def build_539_number_confidence_rank(source_df: Optional[pd.DataFrame] = None) -
             "zone_score": round(zone_score, 2),
             "tie_score": round(tie_score, 2),
         })
-    return _write(rows)
+    return _write(rows, sample_total=total)
 
 
 def build_539_confidence_rank_fallback(top_n: int = 20, source_df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
@@ -1155,7 +1184,7 @@ body{{margin:0;background:#eef2f6;color:#0b2540;font-family:'Microsoft JhengHei'
 <div class='card'><h2>最新資料狀態</h2><div class='tbl'><table><thead><tr><th>遊戲</th><th>最新期別</th><th>開獎日期</th><th>獎號</th><th>特別號 / 第二區</th><th>CSV筆數</th></tr></thead><tbody>{rows_html}</tbody></table></div></div>
 <div class='card'><h2>本次更新合併結果</h2><div class='tbl'><table><thead><tr><th>遊戲</th><th>原本筆數</th><th>抓到筆數</th><th>新增筆數</th><th>合併後筆數</th></tr></thead><tbody>{merge_html}</tbody></table></div></div>
 <div class='card'><h2>今日統計參考號碼</h2><div class='tbl'><table><thead><tr><th>遊戲</th><th>主號 / 第一區</th><th>特別號 / 第二區</th><th>說明</th></tr></thead><tbody>{picks_html}</tbody></table></div></div>
-<div class='card'><h2>539 單號碼信心推薦 Top20</h2><div class='warn'>這裡是 01～39 各單號碼的信心推薦，不是 5 碼組合；分數會依熱度、遺漏、區間補位分開計算。統計分數不保證中獎。</div><div class='good'>目前 539 單號推薦 Top5：<b>{html_escape(top5_nums) if top5_nums else '資料不足'}</b></div><div class='tbl'><table><thead><tr><th>排名</th><th>號碼</th><th>信心分數</th><th>類型</th><th>近30期</th><th>近80期</th><th>遺漏期數</th><th>推薦理由</th></tr></thead><tbody>{number_conf_rows}</tbody></table></div></div>
+<div class='card'><h2>539 單號碼信心推薦 Top20</h2><div class='warn'>這裡是 01～39 各單號碼的信心推薦，不是 5 碼組合；分數會依熱度、遺漏、區間補位分開計算；90+ 代表排行強度高，不是中獎機率。統計分數不保證中獎。</div><div class='good'>目前 539 單號推薦 Top5：<b>{html_escape(top5_nums) if top5_nums else '資料不足'}</b></div><div class='tbl'><table><thead><tr><th>排名</th><th>號碼</th><th>信心分數</th><th>類型</th><th>近30期</th><th>近80期</th><th>遺漏期數</th><th>推薦理由</th></tr></thead><tbody>{number_conf_rows}</tbody></table></div></div>
 <div class='card'><h2>更新來源紀錄</h2><ul>{notes_html}</ul></div>
 <div class='card'><h2>輸出檔</h2><ul><li><code>data/lottery/539.csv</code></li><li><code>data/lottery/lotto.csv</code></li><li><code>data/lottery/power.csv</code></li><li><code>output/lottery_today_picks.csv</code></li><li><code>output/*_number_rank.csv</code></li><li><code>output/lotto_special_rank.csv</code></li><li><code>output/power_special_rank.csv</code></li><li><code>output/539_number_confidence_rank.csv</code>（539 單號碼信心推薦）</li><li><code>output/539_confidence_rank.csv</code>（組合備用輸出，不在首頁顯示）</li></ul></div>
 </div><script>
