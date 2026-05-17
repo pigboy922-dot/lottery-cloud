@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-17 09:35:36",
+  "generated_at": "2026-05-17 09:47:27",
   "latest": [
     {
       "game": "539",
@@ -29,28 +29,24 @@
   "merge": {
     "539": {
       "before": 0,
-      "after": 0,
+      "fetched": 0,
       "added": 0,
-      "fetched": 0
+      "after": 0
     },
     "lotto": {
       "before": 0,
-      "after": 0,
+      "fetched": 0,
       "added": 0,
-      "fetched": 0
+      "after": 0
     },
     "power": {
       "before": 0,
-      "after": 0,
+      "fetched": 0,
       "added": 0,
-      "fetched": 0
+      "after": 0
     }
   },
   "notes": [
-    "today_last_number: 抓取失敗",
-    "latest_result: 抓取失敗",
-    "result_query: 抓取失敗",
-    "ctbc_result_all: 抓取失敗",
-    "history_download: 抓取失敗"
+    "新版：539 改成單號碼信心推薦，分數不再全部固定 50"
   ]
 }

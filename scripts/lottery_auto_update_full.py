@@ -606,6 +606,196 @@ def get_game_numbers_df(game: str) -> pd.DataFrame:
     return df[df["_nums"].map(len) >= (5 if game == "539" else 6)].reset_index(drop=True)
 
 
+def build_539_number_confidence_rank(source_df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+    """Build a 539 single-number confidence table.
+
+    This table ranks individual numbers 01-39, not 5-number combinations.
+    It deliberately avoids flat placeholder scores: even when cloud history is
+    still small, ties are split with deterministic, explainable factors
+    (recent frequency, overdue gap, under-filled zone/parity, and a tiny stable
+    tie-breaker). It is a ranking aid, not a winning guarantee.
+    """
+    df = source_df if source_df is not None else get_game_numbers_df("539")
+    if df is None:
+        df = pd.DataFrame()
+    if not df.empty and "_nums" not in df.columns:
+        try:
+            df = get_game_numbers_df("539")
+        except Exception:
+            df = pd.DataFrame()
+
+    cols = [
+        "rank", "number", "confidence_score", "type",
+        "recent_30_count", "recent_80_count", "gap", "reason",
+        "hot_score", "gap_score", "zone_score", "tie_score",
+    ]
+
+    def _write(rows: List[Dict[str, object]]) -> pd.DataFrame:
+        out = pd.DataFrame(rows)
+        if out.empty:
+            out = pd.DataFrame(columns=cols)
+        out = out.sort_values(["confidence_score", "recent_30_count", "gap", "number"], ascending=[False, False, False, True]).reset_index(drop=True)
+        out["rank"] = range(1, len(out) + 1)
+        for c in cols:
+            if c not in out.columns:
+                out[c] = ""
+        out = out[cols]
+        out.to_csv(OUTPUT_DIR / "539_number_confidence_rank.csv", index=False, encoding="utf-8-sig")
+        # compatible short file for older links
+        out[["rank", "number", "confidence_score", "type"]].head(20).to_csv(OUTPUT_DIR / "539_number_rank.csv", index=False, encoding="utf-8-sig")
+        return out
+
+    starter_order = [
+        4, 7, 13, 16, 22, 28, 33, 11, 19, 25, 31, 36, 2,
+        5, 9, 14, 18, 23, 27, 32, 37, 1, 6, 10, 15, 20,
+        24, 29, 34, 38, 3, 8, 12, 17, 21, 26, 30, 35, 39,
+    ]
+
+    if df.empty:
+        rows = []
+        for idx, n in enumerate(starter_order):
+            zone = (n - 1) // 10 + 1
+            # Deterministic starter scale, not random and not flat 50.
+            score = 59.80 - idx * 0.47 + ((n * 11) % 7) * 0.03
+            rows.append({
+                "rank": 0,
+                "number": f"{n:02d}",
+                "confidence_score": round(max(41.0, score), 2),
+                "type": "啟動分散",
+                "recent_30_count": 0,
+                "recent_80_count": 0,
+                "gap": 0,
+                "reason": f"尚未累積 539 歷史資料；啟動盤先用第 {zone} 區分散推薦，更新後會改用真實開獎統計",
+                "hot_score": 0,
+                "gap_score": 0,
+                "zone_score": round(70 - idx * 0.6, 2),
+                "tie_score": round(((n * 37) % 23) / 23 * 6, 2),
+            })
+        return _write(rows)
+
+    draws = [list(map(int, nums)) for nums in df.get("_nums", []) if isinstance(nums, list) and len(nums) >= 5]
+    total = len(draws)
+    if total <= 0:
+        return build_539_number_confidence_rank(pd.DataFrame())
+
+    recent30 = draws[-min(30, total):]
+    recent80 = draws[-min(80, total):]
+    all_recent = draws[-min(180, total):]
+
+    def _counts(draw_list: List[List[int]]) -> Dict[int, int]:
+        d = {n: 0 for n in range(1, 40)}
+        for nums in draw_list:
+            for n in nums[:5]:
+                if 1 <= int(n) <= 39:
+                    d[int(n)] += 1
+        return d
+
+    c30 = _counts(recent30)
+    c80 = _counts(recent80)
+    c180 = _counts(all_recent)
+
+    # zone/parity pressure: zones/parities that appeared less than expected get a补位 bonus.
+    zone_sizes = {0: 9, 1: 10, 2: 10, 3: 10}
+    zone_hits = {z: 0 for z in zone_sizes}
+    parity_hits = {0: 0, 1: 0}
+    for nums in recent80:
+        for n in nums[:5]:
+            zone_hits[(int(n) - 1) // 10] += 1
+            parity_hits[int(n) % 2] += 1
+
+    total_hits = max(1, len(recent80) * 5)
+    expected_by_zone = {z: total_hits * (size / 39) for z, size in zone_sizes.items()}
+    expected_by_parity = {0: total_hits * (19 / 39), 1: total_hits * (20 / 39)}
+
+    rows = []
+    for n in range(1, 40):
+        # last seen gap: 0 means latest draw, total means not seen in current cloud history.
+        last_seen = None
+        for idx in range(total - 1, -1, -1):
+            if n in draws[idx]:
+                last_seen = idx
+                break
+        gap_raw = total if last_seen is None else total - 1 - last_seen
+
+        exp30 = max(0.001, len(recent30) * 5 / 39)
+        exp80 = max(0.001, len(recent80) * 5 / 39)
+        exp180 = max(0.001, len(all_recent) * 5 / 39)
+
+        # Frequency score: equal to expectation is around 50, capped at 100.
+        hot_score = min(100.0, (c30[n] / exp30) * 50.0)
+        mid_score = min(100.0, (c80[n] / exp80) * 50.0)
+        long_score = min(100.0, (c180[n] / exp180) * 50.0)
+
+        # Gap score prefers moderate overdue, not immediate repeats and not absurdly old.
+        ideal_gap = max(3, min(14, round(39 / 5)))
+        gap_score = max(0.0, 100.0 - abs(gap_raw - ideal_gap) * 8.0)
+        if gap_raw == 0:
+            gap_score *= 0.62
+
+        z = (n - 1) // 10
+        z_expected = expected_by_zone[z]
+        zone_under = max(0.0, (z_expected - zone_hits[z]) / max(0.001, z_expected))
+        zone_score = min(100.0, zone_under * 100.0 + 38.0)
+
+        parity = n % 2
+        p_expected = expected_by_parity[parity]
+        parity_under = max(0.0, (p_expected - parity_hits[parity]) / max(0.001, p_expected))
+        parity_score = min(100.0, parity_under * 100.0 + 42.0)
+
+        # Tiny deterministic tie-breaker so low-sample clouds do not show many identical 50s.
+        tie_score = ((n * 37 + total * 13) % 23) / 23 * 100.0
+
+        sample_cap = 76.0 if total < 10 else (86.0 if total < 30 else 99.0)
+        score = (
+            18.0
+            + hot_score * 0.29
+            + mid_score * 0.16
+            + long_score * 0.08
+            + gap_score * 0.20
+            + zone_score * 0.13
+            + parity_score * 0.06
+            + tie_score * 0.08
+        )
+        score = min(sample_cap, max(1.0, score))
+
+        if c30[n] > exp30 * 1.25 and gap_raw >= ideal_gap:
+            typ = "熱+補"
+        elif c30[n] > exp30 * 1.25:
+            typ = "熱號"
+        elif gap_raw >= ideal_gap:
+            typ = "補位"
+        elif zone_score >= 70:
+            typ = "區間補位"
+        else:
+            typ = "觀察"
+        if total < 10:
+            typ = "啟動-" + typ
+
+        zone_name = f"{z * 10 + 1:02d}-{min(z * 10 + 10, 39):02d}"
+        reason = (
+            f"近{len(recent30)}期出現 {c30[n]} 次，近{len(recent80)}期出現 {c80[n]} 次；"
+            f"遺漏 {gap_raw} 期；{zone_name} 區補位分 {zone_score:.1f}。"
+        )
+        if total < 10:
+            reason += f"目前雲端樣本只有 {total} 期，分數已用低樣本上限處理。"
+
+        rows.append({
+            "rank": 0,
+            "number": f"{n:02d}",
+            "confidence_score": round(score, 2),
+            "type": typ,
+            "recent_30_count": c30[n],
+            "recent_80_count": c80[n],
+            "gap": gap_raw,
+            "reason": reason,
+            "hot_score": round(hot_score, 2),
+            "gap_score": round(gap_score, 2),
+            "zone_score": round(zone_score, 2),
+            "tie_score": round(tie_score, 2),
+        })
+    return _write(rows)
+
+
 def build_539_confidence_rank_fallback(top_n: int = 20, source_df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
     """Generate a non-empty 539 ranking even when cloud history is still small.
 
@@ -646,10 +836,7 @@ def build_539_confidence_rank_fallback(top_n: int = 20, source_df: Optional[pd.D
             })
         out = pd.DataFrame(rows)
         out.insert(0, "rank", range(1, len(out) + 1))
-        indiv_rows = []
-        for n in range(1, 40):
-            indiv_rows.append({"rank": n, "number": f"{n:02d}", "confidence_score": 0, "recent_30_count": 0, "recent_80_count": 0, "gap": 0, "type": "啟動"})
-        pd.DataFrame(indiv_rows).to_csv(OUTPUT_DIR / "539_number_confidence_rank.csv", index=False, encoding="utf-8-sig")
+        build_539_number_confidence_rank(source_df=df)
         return out[cols]
     else:
         total = len(df)
@@ -702,20 +889,7 @@ def build_539_confidence_rank_fallback(top_n: int = 20, source_df: Optional[pd.D
     out = out[cols]
 
     # Also write the individual number ranking so linked output files are not empty.
-    indiv_rows = []
-    for n in range(1, 40):
-        indiv_rows.append({
-            "rank": 0,
-            "number": f"{n:02d}",
-            "confidence_score": round(seen_counts.get(n, 0) / max(1, total) * 100, 2) if total else 0,
-            "recent_30_count": seen_counts.get(n, 0),
-            "recent_80_count": seen_counts.get(n, 0),
-            "gap": 0 if seen_counts.get(n, 0) else total,
-            "type": "啟動"
-        })
-    indiv_df = pd.DataFrame(indiv_rows).sort_values(["confidence_score", "number"], ascending=[False, True]).reset_index(drop=True)
-    indiv_df["rank"] = range(1, len(indiv_df) + 1)
-    indiv_df.to_csv(OUTPUT_DIR / "539_number_confidence_rank.csv", index=False, encoding="utf-8-sig")
+    build_539_number_confidence_rank(source_df=df)
     return out
 
 
@@ -828,20 +1002,7 @@ def build_539_confidence_rank(top_n: int = 20, window_short: int = 30, window_mi
     out.to_csv(OUTPUT_DIR / "539_confidence_rank.csv", index=False, encoding="utf-8-sig")
 
     # individual confidence rank too
-    indiv_rows = []
-    for n, v in indiv.items():
-        indiv_rows.append({
-            "rank": 0,
-            "number": f"{n:02d}",
-            "confidence_score": round(v["score"], 2),
-            "recent_30_count": v["c_s"],
-            "recent_80_count": v["c_m"],
-            "gap": v["gap_raw"],
-            "type": "熱+補" if v["c_s"] >= 4 and v["gap_raw"] >= 4 else ("熱號" if v["c_s"] >= 4 else ("補位" if v["gap_raw"] >= 10 else "觀察"))
-        })
-    indiv_df = pd.DataFrame(indiv_rows).sort_values(["confidence_score", "recent_30_count", "gap"], ascending=False).reset_index(drop=True)
-    indiv_df["rank"] = range(1, len(indiv_df) + 1)
-    indiv_df.to_csv(OUTPUT_DIR / "539_number_confidence_rank.csv", index=False, encoding="utf-8-sig")
+    build_539_number_confidence_rank(source_df=df)
     return out
 
 
@@ -965,6 +1126,9 @@ def build_dashboard(update_notes: List[str], merge_result: Dict[str, Dict[str, i
         _score_num = pd.to_numeric(num_conf_df.get("confidence_score", 0), errors="coerce").fillna(0)
         top5_nums = " ".join(num_conf_df.head(5)["number"].astype(str).map(lambda x: str(x).zfill(2)).tolist()) if _score_num.max() > 0 else ""
         def _num_reason(r: pd.Series) -> str:
+            existing = clean_cell(r.get("reason", ""))
+            if existing:
+                return existing
             typ = clean_cell(r.get("type", "觀察")) or "觀察"
             c30 = clean_cell(r.get("recent_30_count", "0")) or "0"
             c80 = clean_cell(r.get("recent_80_count", "0")) or "0"
@@ -991,7 +1155,7 @@ body{{margin:0;background:#eef2f6;color:#0b2540;font-family:'Microsoft JhengHei'
 <div class='card'><h2>最新資料狀態</h2><div class='tbl'><table><thead><tr><th>遊戲</th><th>最新期別</th><th>開獎日期</th><th>獎號</th><th>特別號 / 第二區</th><th>CSV筆數</th></tr></thead><tbody>{rows_html}</tbody></table></div></div>
 <div class='card'><h2>本次更新合併結果</h2><div class='tbl'><table><thead><tr><th>遊戲</th><th>原本筆數</th><th>抓到筆數</th><th>新增筆數</th><th>合併後筆數</th></tr></thead><tbody>{merge_html}</tbody></table></div></div>
 <div class='card'><h2>今日統計參考號碼</h2><div class='tbl'><table><thead><tr><th>遊戲</th><th>主號 / 第一區</th><th>特別號 / 第二區</th><th>說明</th></tr></thead><tbody>{picks_html}</tbody></table></div></div>
-<div class='card'><h2>539 單號碼信心推薦 Top20</h2><div class='warn'>這裡是各號碼的信心推薦，不是 5 碼組合；可優先參考前 5～8 個號碼自行搭配。統計分數不保證中獎。</div><div class='good'>目前 539 單號推薦 Top5：<b>{html_escape(top5_nums) if top5_nums else '資料不足'}</b></div><div class='tbl'><table><thead><tr><th>排名</th><th>號碼</th><th>信心分數</th><th>類型</th><th>近30期</th><th>近80期</th><th>遺漏期數</th><th>推薦理由</th></tr></thead><tbody>{number_conf_rows}</tbody></table></div></div>
+<div class='card'><h2>539 單號碼信心推薦 Top20</h2><div class='warn'>這裡是 01～39 各單號碼的信心推薦，不是 5 碼組合；分數會依熱度、遺漏、區間補位分開計算。統計分數不保證中獎。</div><div class='good'>目前 539 單號推薦 Top5：<b>{html_escape(top5_nums) if top5_nums else '資料不足'}</b></div><div class='tbl'><table><thead><tr><th>排名</th><th>號碼</th><th>信心分數</th><th>類型</th><th>近30期</th><th>近80期</th><th>遺漏期數</th><th>推薦理由</th></tr></thead><tbody>{number_conf_rows}</tbody></table></div></div>
 <div class='card'><h2>更新來源紀錄</h2><ul>{notes_html}</ul></div>
 <div class='card'><h2>輸出檔</h2><ul><li><code>data/lottery/539.csv</code></li><li><code>data/lottery/lotto.csv</code></li><li><code>data/lottery/power.csv</code></li><li><code>output/lottery_today_picks.csv</code></li><li><code>output/*_number_rank.csv</code></li><li><code>output/lotto_special_rank.csv</code></li><li><code>output/power_special_rank.csv</code></li><li><code>output/539_number_confidence_rank.csv</code>（539 單號碼信心推薦）</li><li><code>output/539_confidence_rank.csv</code>（組合備用輸出，不在首頁顯示）</li></ul></div>
 </div><script>
