@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-17 09:22:31",
+  "generated_at": "2026-05-17 09:35:36",
   "latest": [
     {
       "game": "539",
@@ -29,24 +29,28 @@
   "merge": {
     "539": {
       "before": 0,
-      "fetched": 0,
+      "after": 0,
       "added": 0,
-      "after": 0
+      "fetched": 0
     },
     "lotto": {
       "before": 0,
-      "fetched": 0,
+      "after": 0,
       "added": 0,
-      "after": 0
+      "fetched": 0
     },
     "power": {
       "before": 0,
-      "fetched": 0,
+      "after": 0,
       "added": 0,
-      "after": 0
+      "fetched": 0
     }
   },
   "notes": [
-    "尚未更新：請按網頁上的「更新資料」"
+    "today_last_number: 抓取失敗",
+    "latest_result: 抓取失敗",
+    "result_query: 抓取失敗",
+    "ctbc_result_all: 抓取失敗",
+    "history_download: 抓取失敗"
   ]
 }

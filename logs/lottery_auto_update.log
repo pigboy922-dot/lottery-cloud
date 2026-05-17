@@ -1,14 +1,22 @@
-[2026-05-17 17:07:39] ============================================================
-[2026-05-17 17:07:39] 彩球自動更新開始 mode=weekly
-[2026-05-17 17:07:39] [SSL fallback] 一般驗證失敗，改用備援抓取: https://www.taiwanlottery.com/today_last_number/
-[2026-05-17 17:07:39] [SSL fallback OK] https://www.taiwanlottery.com/today_last_number/
-[2026-05-17 17:07:39] [SSL fallback] 一般驗證失敗，改用備援抓取: https://www.taiwanlottery.com/lotto/lotto_lastest_result/
-[2026-05-17 17:07:39] [SSL fallback OK] https://www.taiwanlottery.com/lotto/lotto_lastest_result/
-[2026-05-17 17:07:40] [SSL fallback] 一般驗證失敗，改用備援抓取: https://www.taiwanlottery.com/lotto/result/4_d/
-[2026-05-17 17:07:40] [SSL fallback OK] https://www.taiwanlottery.com/lotto/result/4_d/
-[2026-05-17 17:07:41] [SSL fallback] 一般驗證失敗，改用備援抓取: https://www.taiwanlottery.com/lotto/history/result_download/
-[2026-05-17 17:07:41] [SSL fallback OK] https://www.taiwanlottery.com/lotto/history/result_download/
-[2026-05-17 17:07:41] 更新完成
-[2026-05-17 17:07:41] 539: before=0 fetched=7 added=2 after=2
-[2026-05-17 17:07:41] lotto: before=0 fetched=7 added=2 after=2
-[2026-05-17 17:07:41] power: before=0 fetched=3 added=1 after=1
+[2026-05-17 09:35:03] ============================================================
+[2026-05-17 09:35:03] 彩球自動更新開始 mode=weekly
+[2026-05-17 09:35:03] 抓取失敗: https://www.taiwanlottery.com/today_last_number/ | HTTPSConnectionPool(host='www.taiwanlottery.com', port=443): Max retries exceeded with url: /today_last_number/ (Caused by NameResolutionError("HTTPSConnection(host='www.taiwanlottery.com', port=443): Failed to resolve 'www.taiwanlottery.com' ([Errno -3] Temporary failure in name resolution)"))
+[2026-05-17 09:35:08] 抓取失敗: https://www.taiwanlottery.com/lotto/lotto_lastest_result/ | HTTPSConnectionPool(host='www.taiwanlottery.com', port=443): Max retries exceeded with url: /lotto/lotto_lastest_result/ (Caused by NameResolutionError("HTTPSConnection(host='www.taiwanlottery.com', port=443): Failed to resolve 'www.taiwanlottery.com' ([Errno -3] Temporary failure in name resolution)"))
+[2026-05-17 09:35:08] 抓取失敗: https://www.taiwanlottery.com/lotto/result/4_d/ | HTTPSConnectionPool(host='www.taiwanlottery.com', port=443): Max retries exceeded with url: /lotto/result/4_d/ (Caused by NameResolutionError("HTTPSConnection(host='www.taiwanlottery.com', port=443): Failed to resolve 'www.taiwanlottery.com' ([Errno -3] Temporary failure in name resolution)"))
+[2026-05-17 09:35:13] 抓取失敗: https://lotto.ctbcbank.com/result_all.htm | HTTPSConnectionPool(host='lotto.ctbcbank.com', port=443): Max retries exceeded with url: /result_all.htm (Caused by NameResolutionError("HTTPSConnection(host='lotto.ctbcbank.com', port=443): Failed to resolve 'lotto.ctbcbank.com' ([Errno -3] Temporary failure in name resolution)"))
+[2026-05-17 09:35:13] 抓取失敗: https://www.taiwanlottery.com/lotto/history/result_download/ | HTTPSConnectionPool(host='www.taiwanlottery.com', port=443): Max retries exceeded with url: /lotto/history/result_download/ (Caused by NameResolutionError("HTTPSConnection(host='www.taiwanlottery.com', port=443): Failed to resolve 'www.taiwanlottery.com' ([Errno -3] Temporary failure in name resolution)"))
+[2026-05-17 09:35:13] 更新完成
+[2026-05-17 09:35:13] 539: before=0 fetched=0 added=0 after=0
+[2026-05-17 09:35:13] lotto: before=0 fetched=0 added=0 after=0
+[2026-05-17 09:35:13] power: before=0 fetched=0 added=0 after=0
+[2026-05-17 09:35:26] ============================================================
+[2026-05-17 09:35:26] 彩球自動更新開始 mode=weekly
+[2026-05-17 09:35:26] 抓取失敗: https://www.taiwanlottery.com/today_last_number/ | HTTPSConnectionPool(host='www.taiwanlottery.com', port=443): Max retries exceeded with url: /today_last_number/ (Caused by NameResolutionError("HTTPSConnection(host='www.taiwanlottery.com', port=443): Failed to resolve 'www.taiwanlottery.com' ([Errno -3] Temporary failure in name resolution)"))
+[2026-05-17 09:35:31] 抓取失敗: https://www.taiwanlottery.com/lotto/lotto_lastest_result/ | HTTPSConnectionPool(host='www.taiwanlottery.com', port=443): Max retries exceeded with url: /lotto/lotto_lastest_result/ (Caused by NameResolutionError("HTTPSConnection(host='www.taiwanlottery.com', port=443): Failed to resolve 'www.taiwanlottery.com' ([Errno -3] Temporary failure in name resolution)"))
+[2026-05-17 09:35:31] 抓取失敗: https://www.taiwanlottery.com/lotto/result/4_d/ | HTTPSConnectionPool(host='www.taiwanlottery.com', port=443): Max retries exceeded with url: /lotto/result/4_d/ (Caused by NameResolutionError("HTTPSConnection(host='www.taiwanlottery.com', port=443): Failed to resolve 'www.taiwanlottery.com' ([Errno -3] Temporary failure in name resolution)"))
+[2026-05-17 09:35:36] 抓取失敗: https://lotto.ctbcbank.com/result_all.htm | HTTPSConnectionPool(host='lotto.ctbcbank.com', port=443): Max retries exceeded with url: /result_all.htm (Caused by NameResolutionError("HTTPSConnection(host='lotto.ctbcbank.com', port=443): Failed to resolve 'lotto.ctbcbank.com' ([Errno -3] Temporary failure in name resolution)"))
+[2026-05-17 09:35:36] 抓取失敗: https://www.taiwanlottery.com/lotto/history/result_download/ | HTTPSConnectionPool(host='www.taiwanlottery.com', port=443): Max retries exceeded with url: /lotto/history/result_download/ (Caused by NameResolutionError("HTTPSConnection(host='www.taiwanlottery.com', port=443): Failed to resolve 'www.taiwanlottery.com' ([Errno -3] Temporary failure in name resolution)"))
+[2026-05-17 09:35:36] 更新完成
+[2026-05-17 09:35:36] 539: before=0 fetched=0 added=0 after=0
+[2026-05-17 09:35:36] lotto: before=0 fetched=0 added=0 after=0
+[2026-05-17 09:35:36] power: before=0 fetched=0 added=0 after=0

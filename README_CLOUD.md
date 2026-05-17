@@ -89,3 +89,11 @@ CLOUD_UPDATE_TOKEN=你的UPDATE_TOKEN
 - 清理 `nan` 空值，避免 539 多出第 6 顆或日期/特別號顯示 nan。
 
 如果想關閉免 token 網頁更新，把 Render 的 `PUBLIC_WEB_UPDATE` 改成 `0`。
+
+## 539 單號碼信心推薦版
+
+首頁已改成顯示 `539 單號碼信心推薦 Top20`，欄位包含：號碼、信心分數、類型、近30期、近80期、遺漏期數與推薦理由。
+
+原本的 539 組合排行仍會輸出到 `output/539_confidence_rank.csv` 作為備用檔，但首頁不再顯示組合排行。
+
+網頁上的「更新資料」按鈕會觸發 `/api/web-update?mode=weekly`，不用手動輸入 API 網址。

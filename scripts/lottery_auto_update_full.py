@@ -950,41 +950,50 @@ def build_dashboard(update_notes: List[str], merge_result: Dict[str, Dict[str, i
         f"<tr><td>{g}</td><td>{pick_display(g, obj)[0]}</td><td>{pick_display(g, obj)[1]}</td><td>統計參考，不保證中獎</td></tr>"
         for g, obj in picks.items()
     )
-    # 539 信心排行 HTML
-    conf_path = OUTPUT_DIR / "539_confidence_rank.csv"
-    if conf_path.exists():
+    # 539 單號碼信心推薦 HTML（顯示各號碼，不顯示組合）
+    number_conf_path = OUTPUT_DIR / "539_number_confidence_rank.csv"
+    if not number_conf_path.exists():
         try:
-            conf_df = pd.read_csv(conf_path).head(10)
-            if conf_df.empty:
-                conf_df = build_539_confidence_rank_fallback(top_n=10)
-            conf_rows = "".join(
-                f"<tr><td>{int(r['rank'])}</td><td><b>{html_escape(r['numbers'])}</b></td><td>{html_escape(r['confidence_score'])}</td>"
-                f"<td>{html_escape(r['confidence_level'])}</td><td>{html_escape(r['reason'])}</td></tr>"
-                for _, r in conf_df.iterrows()
-            )
+            build_539_confidence_rank(top_n=20)
         except Exception:
-            conf_rows = "<tr><td colspan='5'>539 信心排行讀取失敗</td></tr>"
-    else:
-        conf_df = build_539_confidence_rank_fallback(top_n=10)
-        conf_rows = "".join(
-            f"<tr><td>{int(r['rank'])}</td><td><b>{html_escape(r['numbers'])}</b></td><td>{html_escape(r['confidence_score'])}</td>"
-            f"<td>{html_escape(r['confidence_level'])}</td><td>{html_escape(r['reason'])}</td></tr>"
-            for _, r in conf_df.iterrows()
+            build_539_confidence_rank_fallback(top_n=20)
+    try:
+        num_conf_df = pd.read_csv(number_conf_path, dtype=str).head(20)
+        if num_conf_df.empty:
+            build_539_confidence_rank_fallback(top_n=20)
+            num_conf_df = pd.read_csv(number_conf_path, dtype=str).head(20)
+        _score_num = pd.to_numeric(num_conf_df.get("confidence_score", 0), errors="coerce").fillna(0)
+        top5_nums = " ".join(num_conf_df.head(5)["number"].astype(str).map(lambda x: str(x).zfill(2)).tolist()) if _score_num.max() > 0 else ""
+        def _num_reason(r: pd.Series) -> str:
+            typ = clean_cell(r.get("type", "觀察")) or "觀察"
+            c30 = clean_cell(r.get("recent_30_count", "0")) or "0"
+            c80 = clean_cell(r.get("recent_80_count", "0")) or "0"
+            gap = clean_cell(r.get("gap", "0")) or "0"
+            return f"{typ}｜近30期出現 {c30} 次｜近80期出現 {c80} 次｜遺漏 {gap} 期"
+        number_conf_rows = "".join(
+            f"<tr><td>{html_escape(r.get('rank',''))}</td><td class='num-big'><b>{html_escape(str(r.get('number','')).zfill(2))}</b></td>"
+            f"<td>{html_escape(r.get('confidence_score',''))}</td><td>{html_escape(r.get('type',''))}</td>"
+            f"<td>{html_escape(r.get('recent_30_count',''))}</td><td>{html_escape(r.get('recent_80_count',''))}</td>"
+            f"<td>{html_escape(r.get('gap',''))}</td><td>{html_escape(_num_reason(r))}</td></tr>"
+            for _, r in num_conf_df.iterrows()
         )
+    except Exception as exc:
+        top5_nums = ""
+        number_conf_rows = f"<tr><td colspan='8'>539 單號碼信心推薦讀取失敗：{html_escape(exc)}</td></tr>"
     notes_html = "".join(f"<li>{html_escape(n)}</li>" for n in update_notes)
     html = f"""<!doctype html><html lang='zh-Hant'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>
 <title>彩球 Auto Update Dashboard</title>
 <style>
-body{{margin:0;background:#eef2f6;color:#0b2540;font-family:'Microsoft JhengHei',Arial,sans-serif}}.wrap{{max-width:1180px;margin:auto;padding:18px}}.card{{background:#fffdf7;border:1px solid #dde4dc;border-radius:18px;margin:14px 0;padding:16px;box-shadow:0 8px 24px rgba(15,23,42,.06)}}h1{{margin:0 0 6px;font-size:28px}}h2{{font-size:20px}}.sub{{color:#64748b;font-size:13px;line-height:1.6}}table{{border-collapse:collapse;width:100%;font-size:14px}}th,td{{border-bottom:1px solid #e2e8d7;padding:9px;text-align:left;white-space:nowrap}}th{{background:#e8eee2}}.good{{background:#ecfdf5;border:1px solid #99f6e4;color:#0f766e;border-radius:12px;padding:12px;font-weight:800}}.warn{{background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:12px;padding:12px;font-weight:800}}.tbl{{overflow:auto}}code{{background:#f1f5f9;padding:2px 5px;border-radius:6px}}.cloud-actions{{display:flex!important;gap:10px!important;align-items:center!important;flex-wrap:wrap!important;margin-top:14px!important}}.cloud-actions button,.cloud-actions a{{appearance:none!important;border:0!important;border-radius:999px!important;background:#fbbf24!important;color:#111827!important;font-weight:900!important;padding:12px 18px!important;text-decoration:none!important;cursor:pointer!important;font-size:15px!important}}.cloud-actions a{{background:#e5e7eb!important}}#page-update-status{{font-weight:800!important;color:#0f766e!important}}
+body{{margin:0;background:#eef2f6;color:#0b2540;font-family:'Microsoft JhengHei',Arial,sans-serif}}.wrap{{max-width:1180px;margin:auto;padding:18px}}.card{{background:#fffdf7;border:1px solid #dde4dc;border-radius:18px;margin:14px 0;padding:16px;box-shadow:0 8px 24px rgba(15,23,42,.06)}}h1{{margin:0 0 6px;font-size:28px}}h2{{font-size:20px}}.sub{{color:#64748b;font-size:13px;line-height:1.6}}table{{border-collapse:collapse;width:100%;font-size:14px}}th,td{{border-bottom:1px solid #e2e8d7;padding:9px;text-align:left;white-space:nowrap}}th{{background:#e8eee2}}.num-big b{{font-size:20px;letter-spacing:.08em;color:#b45309}}.good{{background:#ecfdf5;border:1px solid #99f6e4;color:#0f766e;border-radius:12px;padding:12px;font-weight:800}}.warn{{background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:12px;padding:12px;font-weight:800}}.tbl{{overflow:auto}}code{{background:#f1f5f9;padding:2px 5px;border-radius:6px}}.cloud-actions{{display:flex!important;gap:10px!important;align-items:center!important;flex-wrap:wrap!important;margin-top:14px!important}}.cloud-actions button,.cloud-actions a{{appearance:none!important;border:0!important;border-radius:999px!important;background:#fbbf24!important;color:#111827!important;font-weight:900!important;padding:12px 18px!important;text-decoration:none!important;cursor:pointer!important;font-size:15px!important}}.cloud-actions a{{background:#e5e7eb!important}}#page-update-status{{font-weight:800!important;color:#0f766e!important}}
 </style></head><body><div class='wrap'>
 <div class='card'><h1>彩球 Auto Update Dashboard</h1><div class='sub'>產生時間：{now_str()}｜每次跑會先抓最新資料、合併 CSV、去重複，再產生報告。</div><div class='cloud-actions'><button type='button' onclick="lotteryCloudUpdate('weekly')">更新資料</button><a href='/api/status' target='_blank' rel='noopener'>狀態</a><span id='page-update-status'>按「更新資料」即可重新抓取並產生報表</span></div></div>
 <div class='card'><div class='good'>完成：已執行自動更新流程。若官方頁面尚未公布最新期別，下面會保留目前最新資料。</div></div>
 <div class='card'><h2>最新資料狀態</h2><div class='tbl'><table><thead><tr><th>遊戲</th><th>最新期別</th><th>開獎日期</th><th>獎號</th><th>特別號 / 第二區</th><th>CSV筆數</th></tr></thead><tbody>{rows_html}</tbody></table></div></div>
 <div class='card'><h2>本次更新合併結果</h2><div class='tbl'><table><thead><tr><th>遊戲</th><th>原本筆數</th><th>抓到筆數</th><th>新增筆數</th><th>合併後筆數</th></tr></thead><tbody>{merge_html}</tbody></table></div></div>
 <div class='card'><h2>今日統計參考號碼</h2><div class='tbl'><table><thead><tr><th>遊戲</th><th>主號 / 第一區</th><th>特別號 / 第二區</th><th>說明</th></tr></thead><tbody>{picks_html}</tbody></table></div></div>
-<div class='card'><h2>539 信心排行 Top10</h2><div class='warn'>這是統計信心分數，不保證中獎；分數只代表近期开奖熱度、遺漏補位、組合關聯與分散度。</div><div class='tbl'><table><thead><tr><th>排名</th><th>539 組合</th><th>信心分數</th><th>等級</th><th>理由</th></tr></thead><tbody>{conf_rows}</tbody></table></div></div>
+<div class='card'><h2>539 單號碼信心推薦 Top20</h2><div class='warn'>這裡是各號碼的信心推薦，不是 5 碼組合；可優先參考前 5～8 個號碼自行搭配。統計分數不保證中獎。</div><div class='good'>目前 539 單號推薦 Top5：<b>{html_escape(top5_nums) if top5_nums else '資料不足'}</b></div><div class='tbl'><table><thead><tr><th>排名</th><th>號碼</th><th>信心分數</th><th>類型</th><th>近30期</th><th>近80期</th><th>遺漏期數</th><th>推薦理由</th></tr></thead><tbody>{number_conf_rows}</tbody></table></div></div>
 <div class='card'><h2>更新來源紀錄</h2><ul>{notes_html}</ul></div>
-<div class='card'><h2>輸出檔</h2><ul><li><code>data/lottery/539.csv</code></li><li><code>data/lottery/lotto.csv</code></li><li><code>data/lottery/power.csv</code></li><li><code>output/lottery_today_picks.csv</code></li><li><code>output/*_number_rank.csv</code></li><li><code>output/lotto_special_rank.csv</code></li><li><code>output/power_special_rank.csv</code></li><li><code>output/539_confidence_rank.csv</code></li><li><code>output/539_number_confidence_rank.csv</code></li></ul></div>
+<div class='card'><h2>輸出檔</h2><ul><li><code>data/lottery/539.csv</code></li><li><code>data/lottery/lotto.csv</code></li><li><code>data/lottery/power.csv</code></li><li><code>output/lottery_today_picks.csv</code></li><li><code>output/*_number_rank.csv</code></li><li><code>output/lotto_special_rank.csv</code></li><li><code>output/power_special_rank.csv</code></li><li><code>output/539_number_confidence_rank.csv</code>（539 單號碼信心推薦）</li><li><code>output/539_confidence_rank.csv</code>（組合備用輸出，不在首頁顯示）</li></ul></div>
 </div><script>
 (function(){{
   const statusEl = document.getElementById('page-update-status');
