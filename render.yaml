@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: lottery-cloud
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn cloud_app:app --host 0.0.0.0 --port $PORT
+    autoDeploy: true
+    envVars:
+      - key: APP_NAME
+        value: 彩球雲端版
+      - key: LOTTERY_UPDATE_MODE
+        value: daily
+      - key: AUTO_UPDATE_ON_START
+        value: "0"
+      - key: UPDATE_TOKEN
+        generateValue: true

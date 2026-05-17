@@ -1,0 +1,56 @@
+{
+  "generated_at": "2026-05-17 17:07:41",
+  "latest": [
+    {
+      "game": "539",
+      "draw_no": "115000120",
+      "draw_date": "nan",
+      "numbers": "2 11 28 32 33 nan",
+      "special": "nan",
+      "rows": "2"
+    },
+    {
+      "game": "lotto",
+      "draw_no": "115000120",
+      "draw_date": "nan",
+      "numbers": "2 3 49 4 5 10",
+      "special": "39",
+      "rows": "2"
+    },
+    {
+      "game": "power",
+      "draw_no": "115000039",
+      "draw_date": "nan",
+      "numbers": "1 6 8 9 17 21",
+      "special": "29",
+      "rows": "1"
+    }
+  ],
+  "merge": {
+    "539": {
+      "before": 0,
+      "after": 2,
+      "added": 2,
+      "fetched": 7
+    },
+    "lotto": {
+      "before": 0,
+      "after": 2,
+      "added": 2,
+      "fetched": 7
+    },
+    "power": {
+      "before": 0,
+      "after": 1,
+      "added": 1,
+      "fetched": 3
+    }
+  },
+  "notes": [
+    "today_last_number: 解析 0 筆",
+    "latest_result: 解析 0 筆",
+    "result_query: 解析 0 筆",
+    "ctbc_result_all: 解析 17 筆",
+    "history_download: 找不到下載連結，可能官方頁面改版"
+  ]
+}
