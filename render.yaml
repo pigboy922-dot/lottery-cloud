@@ -12,5 +12,7 @@ services:
         value: daily
       - key: AUTO_UPDATE_ON_START
         value: "0"
+      - key: PUBLIC_WEB_UPDATE
+        value: "1"
       - key: UPDATE_TOKEN
         generateValue: true

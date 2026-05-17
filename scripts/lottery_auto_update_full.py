@@ -123,6 +123,26 @@ def normalize_digits(s: str) -> str:
     return str(s).translate(trans)
 
 
+def clean_cell(value: object) -> str:
+    """Normalize common empty values that may come from pandas / HTML tables."""
+    if value is None:
+        return ""
+    s = normalize_digits(str(value)).strip()
+    if s.lower() in {"", "nan", "none", "nat", "<na>", "null"}:
+        return ""
+    return s
+
+
+def valid_int_text(value: object, min_v: int = 1, max_v: int = 49) -> str:
+    s = clean_cell(value)
+    if not re.fullmatch(r"\d{1,2}", s):
+        return ""
+    n = int(s)
+    if min_v <= n <= max_v:
+        return str(n)
+    return ""
+
+
 def roc_to_ad_date(s: str) -> Optional[str]:
     s = normalize_digits(s).strip()
     # 115/05/14, 115-05-14, 2026/05/14
@@ -178,11 +198,24 @@ def clean_df(df: pd.DataFrame) -> pd.DataFrame:
         if c not in df.columns:
             df[c] = ""
     df = df[list(empty_df().columns)].copy()
-    df["draw_no"] = df["draw_no"].astype(str).str.strip()
-    df["draw_date"] = df["draw_date"].astype(str).str.strip()
-    df["game"] = df["game"].astype(str).str.strip()
+
+    # 全欄位先清掉 pandas/HTML 常見空值，避免 Dashboard 出現 nan。
+    for c in df.columns:
+        df[c] = df[c].map(clean_cell)
+
+    df["draw_no"] = df["draw_no"].map(clean_cell)
+    df["draw_date"] = df["draw_date"].map(clean_cell)
+    df["game"] = df["game"].map(clean_cell)
+
     for c in ["n1", "n2", "n3", "n4", "n5", "n6", "special"]:
-        df[c] = pd.to_numeric(df[c], errors="coerce").astype("Int64").astype(str).replace("<NA>", "")
+        max_v = 39 if c != "special" and df["game"].eq("539").all() else 49
+        df[c] = df[c].map(lambda x: valid_int_text(x, 1, 49))
+
+    # 539 沒有第 6 顆與特別號，強制清空。
+    is_539 = df["game"].eq("539")
+    df.loc[is_539, "n6"] = ""
+    df.loc[is_539, "special"] = ""
+
     # 沒期別時用日期+號碼做 key
     df = df[(df["game"] != "") & ((df["draw_no"] != "") | (df["draw_date"] != ""))]
     # 去重：優先用 game+draw_no；沒 draw_no 才用 date+numbers
@@ -208,29 +241,38 @@ def infer_game_from_text(text: str) -> Optional[str]:
 
 
 def row_from_values(game: str, draw_no: str, draw_date: str, nums: List[int], special: Optional[int], source: str) -> Dict[str, str]:
-    nums = list(nums or [])
+    nums = [int(n) for n in list(nums or []) if isinstance(n, int) or str(n).isdigit()]
     if game == "539":
-        nums = nums[:5]
+        nums = [n for n in nums if 1 <= n <= 39][:5]
         special = None
     elif game == "lotto":
-        nums = nums[:6]
+        nums = [n for n in nums if 1 <= n <= 49][:6]
+        if special is not None and not (1 <= int(special) <= 49):
+            special = None
     elif game == "power":
         # 威力彩：第一區 6 號，第二區 special；若只抓到7個，最後當 special
-        if special is None and len(nums) >= 7:
-            special = nums[6]
-            nums = nums[:6]
+        clean_nums = [n for n in nums if 1 <= n <= 49]
+        if special is None and len(clean_nums) >= 7:
+            special = clean_nums[6]
+            nums = clean_nums[:6]
         else:
-            nums = nums[:6]
+            nums = clean_nums[:6]
+        if special is not None and not (1 <= int(special) <= 8):
+            # 第二區只允許 1~8，錯誤資料直接清掉。
+            special = None
     row = {
-        "game": game,
-        "draw_no": str(draw_no or "").strip(),
-        "draw_date": draw_date or "",
-        "source": source,
+        "game": clean_cell(game),
+        "draw_no": clean_cell(draw_no),
+        "draw_date": clean_cell(draw_date),
+        "source": clean_cell(source),
         "updated_at": now_str(),
         "special": "" if special is None else str(int(special)),
     }
     for i in range(1, 7):
         row[f"n{i}"] = str(nums[i-1]) if i <= len(nums) else ""
+    if game == "539":
+        row["n6"] = ""
+        row["special"] = ""
     return row
 
 
@@ -501,13 +543,23 @@ def latest_info(game: str) -> Dict[str, str]:
     if df.empty:
         return {"game": game, "draw_no": "", "draw_date": "", "numbers": "", "special": "", "rows": "0"}
     r = df.iloc[-1]
-    nums = [str(r.get(f"n{i}", "")) for i in range(1, 7) if str(r.get(f"n{i}", "")).strip()]
+    max_i = 5 if game == "539" else 6
+    nums = []
+    for i in range(1, max_i + 1):
+        v = valid_int_text(r.get(f"n{i}", ""), 1, 39 if game == "539" else 49)
+        if v:
+            nums.append(v)
+    sp = ""
+    if game == "lotto":
+        sp = valid_int_text(r.get("special", ""), 1, 49)
+    elif game == "power":
+        sp = valid_int_text(r.get("special", ""), 1, 8)
     return {
         "game": game,
-        "draw_no": str(r.get("draw_no", "")),
-        "draw_date": str(r.get("draw_date", "")),
+        "draw_no": clean_cell(r.get("draw_no", "")),
+        "draw_date": clean_cell(r.get("draw_date", "")),
         "numbers": " ".join(nums),
-        "special": str(r.get("special", "")),
+        "special": sp,
         "rows": str(len(df)),
     }
 
@@ -554,6 +606,119 @@ def get_game_numbers_df(game: str) -> pd.DataFrame:
     return df[df["_nums"].map(len) >= (5 if game == "539" else 6)].reset_index(drop=True)
 
 
+def build_539_confidence_rank_fallback(top_n: int = 20, source_df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+    """Generate a non-empty 539 ranking even when cloud history is still small.
+
+    This prevents the dashboard from showing a blank Top10 right after a fresh
+    cloud deployment. Scores are deliberately marked as 「啟動」 because the data
+    volume is not enough for a full confidence model yet.
+    """
+    from itertools import combinations
+
+    cols = ["rank", "numbers", "confidence_score", "confidence_level", "hot_score", "gap_score", "pair_score", "balance_score", "reason"]
+    df = source_df if source_df is not None else get_game_numbers_df("539")
+    if df is None or df.empty:
+        # No data at all: still show balanced starter combinations so the UI
+        # never looks broken. These are neutral placeholders, not predictions.
+        seen_counts = {n: 0 for n in range(1, 40)}
+        total = 0
+        neutral_combos = [
+            (1, 8, 16, 24, 32), (2, 9, 17, 25, 33), (3, 10, 18, 26, 34),
+            (4, 11, 19, 27, 35), (5, 12, 20, 28, 36), (6, 13, 21, 29, 37),
+            (7, 14, 22, 30, 38), (8, 15, 23, 31, 39), (1, 12, 18, 29, 35),
+            (2, 11, 20, 27, 38), (3, 14, 21, 30, 36), (4, 9, 22, 28, 39),
+            (5, 16, 23, 31, 37), (6, 10, 19, 25, 34), (7, 13, 17, 26, 33),
+            (1, 15, 21, 28, 39), (2, 8, 19, 30, 37), (3, 11, 22, 29, 38),
+            (4, 12, 23, 26, 35), (5, 14, 18, 31, 36),
+        ]
+        rows = []
+        for combo in neutral_combos[:top_n]:
+            balance_score = 75.0
+            rows.append({
+                "numbers": " ".join(f"{n:02d}" for n in combo),
+                "confidence_score": 50.0,
+                "confidence_level": "啟動",
+                "hot_score": 0,
+                "gap_score": 50,
+                "pair_score": 0,
+                "balance_score": balance_score,
+                "reason": "尚未累積 539 資料，先顯示分散啟動組合",
+            })
+        out = pd.DataFrame(rows)
+        out.insert(0, "rank", range(1, len(out) + 1))
+        indiv_rows = []
+        for n in range(1, 40):
+            indiv_rows.append({"rank": n, "number": f"{n:02d}", "confidence_score": 0, "recent_30_count": 0, "recent_80_count": 0, "gap": 0, "type": "啟動"})
+        pd.DataFrame(indiv_rows).to_csv(OUTPUT_DIR / "539_number_confidence_rank.csv", index=False, encoding="utf-8-sig")
+        return out[cols]
+    else:
+        total = len(df)
+        seen_counts = {n: 0 for n in range(1, 40)}
+        for nums in df.get("_nums", []):
+            for n in nums:
+                if 1 <= int(n) <= 39:
+                    seen_counts[int(n)] += 1
+        hot = sorted(seen_counts, key=lambda n: (seen_counts[n], -n), reverse=True)[:14]
+        gap_like = [n for n in range(1, 40) if seen_counts[n] == 0][:10]
+        base_pool = sorted(set(hot + gap_like))
+        if len(base_pool) < 14:
+            base_pool = sorted(set(base_pool + list(range(1, 40))))[:20]
+
+    def balance(combo: Tuple[int, ...]) -> float:
+        span = max(combo) - min(combo)
+        odd = sum(1 for n in combo if n % 2)
+        zone_hits = len(set((n - 1) // 10 for n in combo))
+        span_score = min(span / 28 * 100, 100)
+        odd_score = max(0, 100 - abs(odd - 2.5) * 18)
+        zone_score = min(zone_hits / 4 * 100, 100)
+        return span_score * 0.45 + odd_score * 0.25 + zone_score * 0.30
+
+    rows = []
+    for combo in combinations(base_pool[:22], 5):
+        combo = tuple(sorted(combo))
+        hot_score = sum(seen_counts.get(n, 0) for n in combo) / max(1, total) * 20 if total else 0
+        gap_score = sum(1 for n in combo if seen_counts.get(n, 0) == 0) / 5 * 100 if total else 50
+        pair_score = 0
+        balance_score = balance(combo)
+        score = hot_score * 0.35 + gap_score * 0.20 + balance_score * 0.45
+        rows.append({
+            "numbers": " ".join(f"{n:02d}" for n in combo),
+            "confidence_score": round(score, 2),
+            "confidence_level": "啟動",
+            "hot_score": round(hot_score, 2),
+            "gap_score": round(gap_score, 2),
+            "pair_score": round(pair_score, 2),
+            "balance_score": round(balance_score, 2),
+            "reason": f"雲端資料目前 {total} 筆，先用現有熱度＋分散度產生啟動排行",
+        })
+    out = pd.DataFrame(rows).sort_values(["confidence_score", "balance_score", "numbers"], ascending=[False, False, True]).head(top_n).reset_index(drop=True)
+    if out.empty:
+        out = pd.DataFrame([{ 
+            "numbers": "01 08 16 24 32", "confidence_score": 50.0, "confidence_level": "啟動",
+            "hot_score": 0, "gap_score": 50, "pair_score": 0, "balance_score": 75,
+            "reason": "尚未累積資料，先顯示啟動組合"
+        }])
+    out.insert(0, "rank", range(1, len(out) + 1))
+    out = out[cols]
+
+    # Also write the individual number ranking so linked output files are not empty.
+    indiv_rows = []
+    for n in range(1, 40):
+        indiv_rows.append({
+            "rank": 0,
+            "number": f"{n:02d}",
+            "confidence_score": round(seen_counts.get(n, 0) / max(1, total) * 100, 2) if total else 0,
+            "recent_30_count": seen_counts.get(n, 0),
+            "recent_80_count": seen_counts.get(n, 0),
+            "gap": 0 if seen_counts.get(n, 0) else total,
+            "type": "啟動"
+        })
+    indiv_df = pd.DataFrame(indiv_rows).sort_values(["confidence_score", "number"], ascending=[False, True]).reset_index(drop=True)
+    indiv_df["rank"] = range(1, len(indiv_df) + 1)
+    indiv_df.to_csv(OUTPUT_DIR / "539_number_confidence_rank.csv", index=False, encoding="utf-8-sig")
+    return out
+
+
 def build_539_confidence_rank(top_n: int = 20, window_short: int = 30, window_mid: int = 80, window_long: int = 180) -> pd.DataFrame:
     """Build 539 confidence ranking.
 
@@ -567,7 +732,7 @@ def build_539_confidence_rank(top_n: int = 20, window_short: int = 30, window_mi
     df = get_game_numbers_df(game)
     cols = ["rank", "numbers", "confidence_score", "confidence_level", "hot_score", "gap_score", "pair_score", "balance_score", "reason"]
     if df.empty or len(df) < 10:
-        out = pd.DataFrame(columns=cols)
+        out = build_539_confidence_rank_fallback(top_n=top_n, source_df=df)
         out.to_csv(OUTPUT_DIR / "539_confidence_rank.csv", index=False, encoding="utf-8-sig")
         return out
 
@@ -790,6 +955,8 @@ def build_dashboard(update_notes: List[str], merge_result: Dict[str, Dict[str, i
     if conf_path.exists():
         try:
             conf_df = pd.read_csv(conf_path).head(10)
+            if conf_df.empty:
+                conf_df = build_539_confidence_rank_fallback(top_n=10)
             conf_rows = "".join(
                 f"<tr><td>{int(r['rank'])}</td><td><b>{html_escape(r['numbers'])}</b></td><td>{html_escape(r['confidence_score'])}</td>"
                 f"<td>{html_escape(r['confidence_level'])}</td><td>{html_escape(r['reason'])}</td></tr>"
@@ -798,14 +965,19 @@ def build_dashboard(update_notes: List[str], merge_result: Dict[str, Dict[str, i
         except Exception:
             conf_rows = "<tr><td colspan='5'>539 信心排行讀取失敗</td></tr>"
     else:
-        conf_rows = "<tr><td colspan='5'>539 資料不足，尚未產生信心排行</td></tr>"
+        conf_df = build_539_confidence_rank_fallback(top_n=10)
+        conf_rows = "".join(
+            f"<tr><td>{int(r['rank'])}</td><td><b>{html_escape(r['numbers'])}</b></td><td>{html_escape(r['confidence_score'])}</td>"
+            f"<td>{html_escape(r['confidence_level'])}</td><td>{html_escape(r['reason'])}</td></tr>"
+            for _, r in conf_df.iterrows()
+        )
     notes_html = "".join(f"<li>{html_escape(n)}</li>" for n in update_notes)
     html = f"""<!doctype html><html lang='zh-Hant'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>
 <title>彩球 Auto Update Dashboard</title>
 <style>
-body{{margin:0;background:#eef2f6;color:#0b2540;font-family:'Microsoft JhengHei',Arial,sans-serif}}.wrap{{max-width:1180px;margin:auto;padding:18px}}.card{{background:#fffdf7;border:1px solid #dde4dc;border-radius:18px;margin:14px 0;padding:16px;box-shadow:0 8px 24px rgba(15,23,42,.06)}}h1{{margin:0 0 6px;font-size:28px}}h2{{font-size:20px}}.sub{{color:#64748b;font-size:13px;line-height:1.6}}table{{border-collapse:collapse;width:100%;font-size:14px}}th,td{{border-bottom:1px solid #e2e8d7;padding:9px;text-align:left;white-space:nowrap}}th{{background:#e8eee2}}.good{{background:#ecfdf5;border:1px solid #99f6e4;color:#0f766e;border-radius:12px;padding:12px;font-weight:800}}.warn{{background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:12px;padding:12px;font-weight:800}}.tbl{{overflow:auto}}code{{background:#f1f5f9;padding:2px 5px;border-radius:6px}}
+body{{margin:0;background:#eef2f6;color:#0b2540;font-family:'Microsoft JhengHei',Arial,sans-serif}}.wrap{{max-width:1180px;margin:auto;padding:18px}}.card{{background:#fffdf7;border:1px solid #dde4dc;border-radius:18px;margin:14px 0;padding:16px;box-shadow:0 8px 24px rgba(15,23,42,.06)}}h1{{margin:0 0 6px;font-size:28px}}h2{{font-size:20px}}.sub{{color:#64748b;font-size:13px;line-height:1.6}}table{{border-collapse:collapse;width:100%;font-size:14px}}th,td{{border-bottom:1px solid #e2e8d7;padding:9px;text-align:left;white-space:nowrap}}th{{background:#e8eee2}}.good{{background:#ecfdf5;border:1px solid #99f6e4;color:#0f766e;border-radius:12px;padding:12px;font-weight:800}}.warn{{background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:12px;padding:12px;font-weight:800}}.tbl{{overflow:auto}}code{{background:#f1f5f9;padding:2px 5px;border-radius:6px}}.cloud-actions{{display:flex!important;gap:10px!important;align-items:center!important;flex-wrap:wrap!important;margin-top:14px!important}}.cloud-actions button,.cloud-actions a{{appearance:none!important;border:0!important;border-radius:999px!important;background:#fbbf24!important;color:#111827!important;font-weight:900!important;padding:12px 18px!important;text-decoration:none!important;cursor:pointer!important;font-size:15px!important}}.cloud-actions a{{background:#e5e7eb!important}}#page-update-status{{font-weight:800!important;color:#0f766e!important}}
 </style></head><body><div class='wrap'>
-<div class='card'><h1>彩球 Auto Update Dashboard</h1><div class='sub'>產生時間：{now_str()}｜每次跑會先抓最新資料、合併 CSV、去重複，再產生報告。</div></div>
+<div class='card'><h1>彩球 Auto Update Dashboard</h1><div class='sub'>產生時間：{now_str()}｜每次跑會先抓最新資料、合併 CSV、去重複，再產生報告。</div><div class='cloud-actions'><button type='button' onclick="lotteryCloudUpdate('weekly')">更新資料</button><a href='/api/status' target='_blank' rel='noopener'>狀態</a><span id='page-update-status'>按「更新資料」即可重新抓取並產生報表</span></div></div>
 <div class='card'><div class='good'>完成：已執行自動更新流程。若官方頁面尚未公布最新期別，下面會保留目前最新資料。</div></div>
 <div class='card'><h2>最新資料狀態</h2><div class='tbl'><table><thead><tr><th>遊戲</th><th>最新期別</th><th>開獎日期</th><th>獎號</th><th>特別號 / 第二區</th><th>CSV筆數</th></tr></thead><tbody>{rows_html}</tbody></table></div></div>
 <div class='card'><h2>本次更新合併結果</h2><div class='tbl'><table><thead><tr><th>遊戲</th><th>原本筆數</th><th>抓到筆數</th><th>新增筆數</th><th>合併後筆數</th></tr></thead><tbody>{merge_html}</tbody></table></div></div>
@@ -813,7 +985,51 @@ body{{margin:0;background:#eef2f6;color:#0b2540;font-family:'Microsoft JhengHei'
 <div class='card'><h2>539 信心排行 Top10</h2><div class='warn'>這是統計信心分數，不保證中獎；分數只代表近期开奖熱度、遺漏補位、組合關聯與分散度。</div><div class='tbl'><table><thead><tr><th>排名</th><th>539 組合</th><th>信心分數</th><th>等級</th><th>理由</th></tr></thead><tbody>{conf_rows}</tbody></table></div></div>
 <div class='card'><h2>更新來源紀錄</h2><ul>{notes_html}</ul></div>
 <div class='card'><h2>輸出檔</h2><ul><li><code>data/lottery/539.csv</code></li><li><code>data/lottery/lotto.csv</code></li><li><code>data/lottery/power.csv</code></li><li><code>output/lottery_today_picks.csv</code></li><li><code>output/*_number_rank.csv</code></li><li><code>output/lotto_special_rank.csv</code></li><li><code>output/power_special_rank.csv</code></li><li><code>output/539_confidence_rank.csv</code></li><li><code>output/539_number_confidence_rank.csv</code></li></ul></div>
-</div></body></html>"""
+</div><script>
+(function(){{
+  const statusEl = document.getElementById('page-update-status');
+  async function pollAndReload(){{
+    try{{
+      const res = await fetch('/api/status', {{cache:'no-store'}});
+      const data = await res.json();
+      if(data.update && data.update.running){{
+        if(statusEl) statusEl.textContent = '更新中…完成後會自動重新整理';
+        setTimeout(pollAndReload, 3500);
+        return;
+      }}
+      if(data.update && data.update.last_ok === true){{
+        if(statusEl) statusEl.textContent = '更新完成，重新載入…';
+        location.href='/?t=' + Date.now();
+        return;
+      }}
+      if(data.update && data.update.last_ok === false){{
+        if(statusEl) statusEl.textContent = '更新失敗，請查看狀態或錯誤頁';
+      }}
+    }}catch(e){{ if(statusEl) statusEl.textContent = '狀態讀取失敗'; }}
+  }}
+  window.lotteryCloudUpdate = async function(mode){{
+    const buttons = document.querySelectorAll('.cloud-actions button,#lottery-cloud-toolbar button');
+    buttons.forEach(b => b.disabled = true);
+    if(statusEl) statusEl.textContent = '送出更新…';
+    try{{
+      const res = await fetch('/api/web-update?mode=' + encodeURIComponent(mode || 'weekly'), {{method:'POST', cache:'no-store'}});
+      const text = await res.text();
+      if(!res.ok){{
+        if(statusEl) statusEl.textContent = '更新啟動失敗 ' + res.status;
+        alert(text);
+        buttons.forEach(b => b.disabled = false);
+        return;
+      }}
+      if(statusEl) statusEl.textContent = '已開始更新…';
+      setTimeout(pollAndReload, 2500);
+    }}catch(e){{
+      if(statusEl) statusEl.textContent = '更新啟動失敗';
+      alert(String(e));
+      buttons.forEach(b => b.disabled = false);
+    }}
+  }};
+}})();
+</script></body></html>"""
     (OUTPUT_DIR / "lottery_final_dashboard.html").write_text(html, encoding="utf-8")
     # status
     status = {

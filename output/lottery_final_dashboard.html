@@ -1,14 +1,58 @@
 <!doctype html><html lang='zh-Hant'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>
 <title>彩球 Auto Update Dashboard</title>
 <style>
-body{margin:0;background:#eef2f6;color:#0b2540;font-family:'Microsoft JhengHei',Arial,sans-serif}.wrap{max-width:1180px;margin:auto;padding:18px}.card{background:#fffdf7;border:1px solid #dde4dc;border-radius:18px;margin:14px 0;padding:16px;box-shadow:0 8px 24px rgba(15,23,42,.06)}h1{margin:0 0 6px;font-size:28px}h2{font-size:20px}.sub{color:#64748b;font-size:13px;line-height:1.6}table{border-collapse:collapse;width:100%;font-size:14px}th,td{border-bottom:1px solid #e2e8d7;padding:9px;text-align:left;white-space:nowrap}th{background:#e8eee2}.good{background:#ecfdf5;border:1px solid #99f6e4;color:#0f766e;border-radius:12px;padding:12px;font-weight:800}.warn{background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:12px;padding:12px;font-weight:800}.tbl{overflow:auto}code{background:#f1f5f9;padding:2px 5px;border-radius:6px}
+body{margin:0;background:#eef2f6;color:#0b2540;font-family:'Microsoft JhengHei',Arial,sans-serif}.wrap{max-width:1180px;margin:auto;padding:18px}.card{background:#fffdf7;border:1px solid #dde4dc;border-radius:18px;margin:14px 0;padding:16px;box-shadow:0 8px 24px rgba(15,23,42,.06)}h1{margin:0 0 6px;font-size:28px}h2{font-size:20px}.sub{color:#64748b;font-size:13px;line-height:1.6}table{border-collapse:collapse;width:100%;font-size:14px}th,td{border-bottom:1px solid #e2e8d7;padding:9px;text-align:left;white-space:nowrap}th{background:#e8eee2}.good{background:#ecfdf5;border:1px solid #99f6e4;color:#0f766e;border-radius:12px;padding:12px;font-weight:800}.warn{background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:12px;padding:12px;font-weight:800}.tbl{overflow:auto}code{background:#f1f5f9;padding:2px 5px;border-radius:6px}.cloud-actions{display:flex!important;gap:10px!important;align-items:center!important;flex-wrap:wrap!important;margin-top:14px!important}.cloud-actions button,.cloud-actions a{appearance:none!important;border:0!important;border-radius:999px!important;background:#fbbf24!important;color:#111827!important;font-weight:900!important;padding:12px 18px!important;text-decoration:none!important;cursor:pointer!important;font-size:15px!important}.cloud-actions a{background:#e5e7eb!important}#page-update-status{font-weight:800!important;color:#0f766e!important}
 </style></head><body><div class='wrap'>
-<div class='card'><h1>彩球 Auto Update Dashboard</h1><div class='sub'>產生時間：2026-05-17 17:07:41｜每次跑會先抓最新資料、合併 CSV、去重複，再產生報告。</div></div>
+<div class='card'><h1>彩球 Auto Update Dashboard</h1><div class='sub'>產生時間：2026-05-17 09:22:31｜每次跑會先抓最新資料、合併 CSV、去重複，再產生報告。</div><div class='cloud-actions'><button type='button' onclick="lotteryCloudUpdate('weekly')">更新資料</button><a href='/api/status' target='_blank' rel='noopener'>狀態</a><span id='page-update-status'>按「更新資料」即可重新抓取並產生報表</span></div></div>
 <div class='card'><div class='good'>完成：已執行自動更新流程。若官方頁面尚未公布最新期別，下面會保留目前最新資料。</div></div>
-<div class='card'><h2>最新資料狀態</h2><div class='tbl'><table><thead><tr><th>遊戲</th><th>最新期別</th><th>開獎日期</th><th>獎號</th><th>特別號 / 第二區</th><th>CSV筆數</th></tr></thead><tbody><tr><td>539</td><td>115000120</td><td>nan</td><td>2 11 28 32 33 nan</td><td>nan</td><td>2</td></tr><tr><td>lotto</td><td>115000120</td><td>nan</td><td>2 3 49 4 5 10</td><td>39</td><td>2</td></tr><tr><td>power</td><td>115000039</td><td>nan</td><td>1 6 8 9 17 21</td><td>29</td><td>1</td></tr></tbody></table></div></div>
-<div class='card'><h2>本次更新合併結果</h2><div class='tbl'><table><thead><tr><th>遊戲</th><th>原本筆數</th><th>抓到筆數</th><th>新增筆數</th><th>合併後筆數</th></tr></thead><tbody><tr><td>539</td><td>0</td><td>7</td><td>2</td><td>2</td></tr><tr><td>lotto</td><td>0</td><td>7</td><td>2</td><td>2</td></tr><tr><td>power</td><td>0</td><td>3</td><td>1</td><td>1</td></tr></tbody></table></div></div>
-<div class='card'><h2>今日統計參考號碼</h2><div class='tbl'><table><thead><tr><th>遊戲</th><th>主號 / 第一區</th><th>特別號 / 第二區</th><th>說明</th></tr></thead><tbody><tr><td>539</td><td>1 3 5 8 14</td><td>無特別號</td><td>統計參考，不保證中獎</td></tr><tr><td>lotto</td><td>16 29 30 35 42 43</td><td>特別號：1</td><td>統計參考，不保證中獎</td></tr><tr><td>power</td><td>1 6 8 9 17 21</td><td>第二區：1</td><td>統計參考，不保證中獎</td></tr></tbody></table></div></div>
-<div class='card'><h2>539 信心排行 Top10</h2><div class='warn'>這是統計信心分數，不保證中獎；分數只代表近期开奖熱度、遺漏補位、組合關聯與分散度。</div><div class='tbl'><table><thead><tr><th>排名</th><th>539 組合</th><th>信心分數</th><th>等級</th><th>理由</th></tr></thead><tbody></tbody></table></div></div>
-<div class='card'><h2>更新來源紀錄</h2><ul><li>today_last_number: 解析 0 筆</li><li>latest_result: 解析 0 筆</li><li>result_query: 解析 0 筆</li><li>ctbc_result_all: 解析 17 筆</li><li>history_download: 找不到下載連結，可能官方頁面改版</li></ul></div>
+<div class='card'><h2>最新資料狀態</h2><div class='tbl'><table><thead><tr><th>遊戲</th><th>最新期別</th><th>開獎日期</th><th>獎號</th><th>特別號 / 第二區</th><th>CSV筆數</th></tr></thead><tbody><tr><td>539</td><td></td><td></td><td></td><td></td><td>0</td></tr><tr><td>lotto</td><td></td><td></td><td></td><td></td><td>0</td></tr><tr><td>power</td><td></td><td></td><td></td><td></td><td>0</td></tr></tbody></table></div></div>
+<div class='card'><h2>本次更新合併結果</h2><div class='tbl'><table><thead><tr><th>遊戲</th><th>原本筆數</th><th>抓到筆數</th><th>新增筆數</th><th>合併後筆數</th></tr></thead><tbody><tr><td>539</td><td>0</td><td>0</td><td>0</td><td>0</td></tr><tr><td>lotto</td><td>0</td><td>0</td><td>0</td><td>0</td></tr><tr><td>power</td><td>0</td><td>0</td><td>0</td><td>0</td></tr></tbody></table></div></div>
+<div class='card'><h2>今日統計參考號碼</h2><div class='tbl'><table><thead><tr><th>遊戲</th><th>主號 / 第一區</th><th>特別號 / 第二區</th><th>說明</th></tr></thead><tbody><tr><td>539</td><td></td><td>無特別號</td><td>統計參考，不保證中獎</td></tr><tr><td>lotto</td><td></td><td>特別號：資料不足</td><td>統計參考，不保證中獎</td></tr><tr><td>power</td><td></td><td>第二區：資料不足</td><td>統計參考，不保證中獎</td></tr></tbody></table></div></div>
+<div class='card'><h2>539 信心排行 Top10</h2><div class='warn'>這是統計信心分數，不保證中獎；分數只代表近期开奖熱度、遺漏補位、組合關聯與分散度。</div><div class='tbl'><table><thead><tr><th>排名</th><th>539 組合</th><th>信心分數</th><th>等級</th><th>理由</th></tr></thead><tbody><tr><td>1</td><td><b>01 08 16 24 32</b></td><td>50.0</td><td>啟動</td><td>尚未累積 539 資料，先顯示分散啟動組合</td></tr><tr><td>2</td><td><b>02 09 17 25 33</b></td><td>50.0</td><td>啟動</td><td>尚未累積 539 資料，先顯示分散啟動組合</td></tr><tr><td>3</td><td><b>03 10 18 26 34</b></td><td>50.0</td><td>啟動</td><td>尚未累積 539 資料，先顯示分散啟動組合</td></tr><tr><td>4</td><td><b>04 11 19 27 35</b></td><td>50.0</td><td>啟動</td><td>尚未累積 539 資料，先顯示分散啟動組合</td></tr><tr><td>5</td><td><b>05 12 20 28 36</b></td><td>50.0</td><td>啟動</td><td>尚未累積 539 資料，先顯示分散啟動組合</td></tr><tr><td>6</td><td><b>06 13 21 29 37</b></td><td>50.0</td><td>啟動</td><td>尚未累積 539 資料，先顯示分散啟動組合</td></tr><tr><td>7</td><td><b>07 14 22 30 38</b></td><td>50.0</td><td>啟動</td><td>尚未累積 539 資料，先顯示分散啟動組合</td></tr><tr><td>8</td><td><b>08 15 23 31 39</b></td><td>50.0</td><td>啟動</td><td>尚未累積 539 資料，先顯示分散啟動組合</td></tr><tr><td>9</td><td><b>01 12 18 29 35</b></td><td>50.0</td><td>啟動</td><td>尚未累積 539 資料，先顯示分散啟動組合</td></tr><tr><td>10</td><td><b>02 11 20 27 38</b></td><td>50.0</td><td>啟動</td><td>尚未累積 539 資料，先顯示分散啟動組合</td></tr></tbody></table></div></div>
+<div class='card'><h2>更新來源紀錄</h2><ul><li>尚未更新：請按網頁上的「更新資料」</li></ul></div>
 <div class='card'><h2>輸出檔</h2><ul><li><code>data/lottery/539.csv</code></li><li><code>data/lottery/lotto.csv</code></li><li><code>data/lottery/power.csv</code></li><li><code>output/lottery_today_picks.csv</code></li><li><code>output/*_number_rank.csv</code></li><li><code>output/lotto_special_rank.csv</code></li><li><code>output/power_special_rank.csv</code></li><li><code>output/539_confidence_rank.csv</code></li><li><code>output/539_number_confidence_rank.csv</code></li></ul></div>
-</div></body></html>
+</div><script>
+(function(){
+  const statusEl = document.getElementById('page-update-status');
+  async function pollAndReload(){
+    try{
+      const res = await fetch('/api/status', {cache:'no-store'});
+      const data = await res.json();
+      if(data.update && data.update.running){
+        if(statusEl) statusEl.textContent = '更新中…完成後會自動重新整理';
+        setTimeout(pollAndReload, 3500);
+        return;
+      }
+      if(data.update && data.update.last_ok === true){
+        if(statusEl) statusEl.textContent = '更新完成，重新載入…';
+        location.href='/?t=' + Date.now();
+        return;
+      }
+      if(data.update && data.update.last_ok === false){
+        if(statusEl) statusEl.textContent = '更新失敗，請查看狀態或錯誤頁';
+      }
+    }catch(e){ if(statusEl) statusEl.textContent = '狀態讀取失敗'; }
+  }
+  window.lotteryCloudUpdate = async function(mode){
+    const buttons = document.querySelectorAll('.cloud-actions button,#lottery-cloud-toolbar button');
+    buttons.forEach(b => b.disabled = true);
+    if(statusEl) statusEl.textContent = '送出更新…';
+    try{
+      const res = await fetch('/api/web-update?mode=' + encodeURIComponent(mode || 'weekly'), {method:'POST', cache:'no-store'});
+      const text = await res.text();
+      if(!res.ok){
+        if(statusEl) statusEl.textContent = '更新啟動失敗 ' + res.status;
+        alert(text);
+        buttons.forEach(b => b.disabled = false);
+        return;
+      }
+      if(statusEl) statusEl.textContent = '已開始更新…';
+      setTimeout(pollAndReload, 2500);
+    }catch(e){
+      if(statusEl) statusEl.textContent = '更新啟動失敗';
+      alert(String(e));
+      buttons.forEach(b => b.disabled = false);
+    }
+  };
+})();
+</script></body></html>

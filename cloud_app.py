@@ -31,6 +31,8 @@ import lottery_auto_update_full as core  # noqa: E402
 APP_NAME = os.getenv("APP_NAME", "彩球雲端版")
 DEFAULT_MODE = os.getenv("LOTTERY_UPDATE_MODE", "daily").lower()
 AUTO_UPDATE_ON_START = os.getenv("AUTO_UPDATE_ON_START", "0").strip() in {"1", "true", "yes", "y"}
+# 1 = 網頁上的「更新資料」按鈕可直接觸發更新；0 = 改回需要 UPDATE_TOKEN。
+PUBLIC_WEB_UPDATE = os.getenv("PUBLIC_WEB_UPDATE", "1").strip().lower() in {"1", "true", "yes", "y", "on"}
 
 app = FastAPI(title=APP_NAME, version="1.0.0")
 
@@ -91,16 +93,15 @@ def _cloud_overlay() -> str:
 #lottery-cloud-toolbar *{box-sizing:border-box!important}
 #lottery-cloud-toolbar{position:fixed!important;right:16px!important;bottom:16px!important;z-index:2147483000!important;display:flex!important;gap:8px!important;align-items:center!important;flex-wrap:wrap!important;max-width:min(640px,calc(100vw - 32px))!important;padding:10px 12px!important;border-radius:18px!important;background:rgba(15,23,42,.92)!important;color:#fff!important;border:1px solid rgba(255,255,255,.18)!important;box-shadow:0 16px 48px rgba(2,6,23,.35)!important;font-family:'Microsoft JhengHei',Arial,sans-serif!important;font-size:13px!important;line-height:1.3!important;backdrop-filter:blur(10px)!important}
 #lottery-cloud-toolbar strong{font-weight:900!important;color:#fef3c7!important}
-#lottery-cloud-toolbar button,#lottery-cloud-toolbar a{appearance:none!important;border:0!important;border-radius:999px!important;padding:8px 11px!important;font-weight:800!important;text-decoration:none!important;cursor:pointer!important;background:#fbbf24!important;color:#111827!important;font-size:13px!important;line-height:1!important}
-#lottery-cloud-toolbar button.secondary,#lottery-cloud-toolbar a.secondary{background:#e5e7eb!important;color:#111827!important}
+#lottery-cloud-toolbar button,#lottery-cloud-toolbar a{appearance:none!important;border:0!important;border-radius:999px!important;padding:9px 13px!important;font-weight:900!important;text-decoration:none!important;cursor:pointer!important;background:#fbbf24!important;color:#111827!important;font-size:14px!important;line-height:1!important}
+#lottery-cloud-toolbar a.secondary{background:#e5e7eb!important;color:#111827!important}
 #lottery-cloud-toolbar button:disabled{opacity:.6!important;cursor:not-allowed!important}
 #lottery-cloud-status{min-width:110px!important;color:#d1fae5!important}
 @media (max-width:640px){#lottery-cloud-toolbar{left:10px!important;right:10px!important;bottom:10px!important;justify-content:center!important}.lottery-cloud-label{display:none!important}}
 </style>
 <div id="lottery-cloud-toolbar" role="region" aria-label="cloud controls">
   <span class="lottery-cloud-label"><strong>雲端版</strong>｜<span id="lottery-cloud-status">讀取中</span></span>
-  <button type="button" onclick="lotteryCloudUpdate('daily')">每日更新</button>
-  <button type="button" onclick="lotteryCloudUpdate('weekly')">完整補檔</button>
+  <button type="button" onclick="lotteryCloudUpdate('weekly')">更新資料</button>
   <a class="secondary" href="/api/status" target="_blank" rel="noopener">狀態</a>
 </div>
 <script id="lottery-cloud-overlay-script">
@@ -110,30 +111,37 @@ def _cloud_overlay() -> str:
     try{
       const res = await fetch('/api/status', {cache:'no-store'});
       const data = await res.json();
-      if(data.update && data.update.running){ statusEl.textContent = '更新中…'; return; }
+      if(data.update && data.update.running){ statusEl.textContent = '更新中…'; return true; }
       const generated = data.generated_at || (data.file_status && data.file_status.dashboard_mtime) || '尚未更新';
       statusEl.textContent = generated;
-    }catch(e){ statusEl.textContent = '離線'; }
+      return false;
+    }catch(e){ statusEl.textContent = '離線'; return false; }
+  }
+  async function waitDone(){
+    const running = await refreshStatus();
+    if(running){ setTimeout(waitDone, 3500); return; }
+    statusEl.textContent = '完成，重新載入…';
+    location.href='/?t=' + Date.now();
   }
   window.lotteryCloudUpdate = async function(mode){
-    const buttons = document.querySelectorAll('#lottery-cloud-toolbar button');
+    const buttons = document.querySelectorAll('#lottery-cloud-toolbar button,.cloud-actions button');
     buttons.forEach(b => b.disabled = true);
     statusEl.textContent = '送出更新…';
-    let token = localStorage.getItem('lottery_update_token') || '';
-    let url = '/api/update?mode=' + encodeURIComponent(mode);
-    if(token) url += '&token=' + encodeURIComponent(token);
-    let res = await fetch(url, {method:'POST'});
-    if(res.status === 401){
-      token = prompt('請輸入 UPDATE_TOKEN') || '';
-      if(token) localStorage.setItem('lottery_update_token', token);
-      url = '/api/update?mode=' + encodeURIComponent(mode) + '&token=' + encodeURIComponent(token);
-      res = await fetch(url, {method:'POST'});
+    try{
+      let res = await fetch('/api/web-update?mode=' + encodeURIComponent(mode || 'weekly'), {method:'POST', cache:'no-store'});
+      if(res.status === 401){
+        const token = prompt('請輸入 UPDATE_TOKEN') || '';
+        res = await fetch('/api/update?mode=' + encodeURIComponent(mode || 'weekly') + '&token=' + encodeURIComponent(token), {method:'POST', cache:'no-store'});
+      }
+      const text = await res.text();
+      if(!res.ok){ statusEl.textContent = '失敗 ' + res.status; alert(text); buttons.forEach(b => b.disabled = false); return; }
+      statusEl.textContent = '已開始更新…';
+      setTimeout(waitDone, 2500);
+    }catch(e){
+      statusEl.textContent = '更新失敗';
+      alert(String(e));
+      buttons.forEach(b => b.disabled = false);
     }
-    const text = await res.text();
-    statusEl.textContent = res.ok ? '已開始更新' : ('失敗 ' + res.status);
-    setTimeout(refreshStatus, 1800);
-    setTimeout(() => buttons.forEach(b => b.disabled = false), 1800);
-    if(!res.ok) alert(text);
   };
   refreshStatus();
   setInterval(refreshStatus, 10000);
@@ -160,7 +168,7 @@ def _empty_dashboard_html() -> str:
 <style>
 :root{{--bg:#eef2f7;--card:#fffdf7;--text:#0f172a;--muted:#64748b;--line:#dbe4ee;--accent:#fbbf24}}
 *{{box-sizing:border-box}}body{{margin:0;background:linear-gradient(135deg,#eef2f7,#fff7ed);color:var(--text);font-family:'Microsoft JhengHei',Arial,sans-serif}}.wrap{{max-width:980px;margin:0 auto;padding:24px}}.card{{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:22px;margin:16px 0;box-shadow:0 18px 50px rgba(15,23,42,.08)}}h1{{margin:0 0 8px;font-size:32px}}p{{line-height:1.8;color:var(--muted)}}button,a.btn{{border:0;border-radius:999px;background:var(--accent);color:#111827;font-weight:900;padding:12px 18px;text-decoration:none;cursor:pointer;display:inline-block;margin:6px 6px 6px 0}}code{{background:#f1f5f9;border-radius:8px;padding:2px 6px}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}}.mini{{padding:14px;border-radius:18px;background:#f8fafc;border:1px solid #e2e8f0}}</style>
-</head><body><main class="wrap"><section class="card"><h1>{APP_NAME}</h1><p>目前還沒有產生雲端 Dashboard。按下更新後，系統會抓台彩資料、合併 CSV、輸出 <code>output/lottery_final_dashboard.html</code>，之後首頁會直接顯示最新報表。</p><button onclick="lotteryCloudUpdate('weekly')">立即完整補檔</button><a class="btn" href="/api/status" target="_blank" rel="noopener">查看狀態 JSON</a></section><section class="card"><h2>雲端端點</h2><div class="grid"><div class="mini"><b>/</b><br>Dashboard</div><div class="mini"><b>/api/update</b><br>背景更新</div><div class="mini"><b>/api/update-sync</b><br>同步更新，適合 cron</div><div class="mini"><b>/output</b><br>輸出檔案目錄</div></div></section></main>{_cloud_overlay()}</body></html>"""
+</head><body><main class="wrap"><section class="card"><h1>{APP_NAME}</h1><p>目前還沒有產生雲端 Dashboard。按下「更新資料」後，系統會抓台彩資料、合併 CSV、輸出 <code>output/lottery_final_dashboard.html</code>，完成後會自動重新整理。</p><button onclick="lotteryCloudUpdate('weekly')">更新資料</button><a class="btn" href="/api/status" target="_blank" rel="noopener">查看狀態 JSON</a></section><section class="card"><h2>雲端端點</h2><div class="grid"><div class="mini"><b>/</b><br>Dashboard</div><div class="mini"><b>/api/web-update</b><br>網頁按鈕更新</div><div class="mini"><b>/api/update-sync</b><br>同步更新，適合 cron</div><div class="mini"><b>/output</b><br>輸出檔案目錄</div></div></section></main>{_cloud_overlay()}</body></html>"""
 
 
 def _run_update(mode: str) -> Dict[str, Any]:
@@ -244,6 +252,29 @@ def api_status() -> JSONResponse:
         },
     })
     return JSONResponse(status, headers={"Cache-Control": "no-store"})
+
+
+@app.api_route("/api/web-update", methods=["GET", "POST"])
+def api_web_update(request: Request, background_tasks: BackgroundTasks, mode: str | None = None) -> JSONResponse:
+    """One-click update endpoint for the web button.
+
+    PUBLIC_WEB_UPDATE=1 lets the page trigger updates without typing the token.
+    Set PUBLIC_WEB_UPDATE=0 in Render if you want to protect this endpoint too.
+    """
+    if not PUBLIC_WEB_UPDATE:
+        _check_token(request)
+    selected_mode = _allowed_mode(mode or "weekly")
+    if _update_state.get("running"):
+        return JSONResponse({"ok": False, "running": True, "message": "update already running", "update": dict(_update_state)}, status_code=202)
+    background_tasks.add_task(_background_update, selected_mode)
+    _update_state.update({
+        "running": True,
+        "last_started_at": _now(),
+        "last_mode": selected_mode,
+        "last_ok": None,
+        "last_error": None,
+    })
+    return JSONResponse({"ok": True, "running": True, "message": "web update started", "mode": selected_mode}, status_code=202)
 
 
 @app.api_route("/api/update", methods=["GET", "POST"])
